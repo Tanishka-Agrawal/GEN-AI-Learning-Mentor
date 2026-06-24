@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Learnmate AI{% endblock %}</title>
+    
+    <!-- Meta tags for SEO -->
+    <meta name="description" content="Personalized AI Tutor, custom study schedules, smart notes indexing, quiz evaluations, and analytics insights.">
+    <meta name="author" content="Learnmate AI Team">
+    
+    <!-- Core Design Stylesheets -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Chart.js CDN (required for Progress Analytics) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation (Only visible when user is authenticated) -->
+        {% if session.get('user_id') %}
+        <aside class="sidebar">
+            <a href="{{ url_for('dashboard_route') }}" class="sidebar-brand">
+                <div class="brand-icon">
+                    <i data-lucide="graduation-cap"></i>
+                </div>
+                <span class="brand-name">Learnmate AI</span>
+            </a>
+            
+            <ul class="sidebar-menu">
+                <li class="menu-item {% if active_page == 'dashboard' %}active{% endif %}">
+                    <a href="{{ url_for('dashboard_route') }}">
+                        <i data-lucide="layout-dashboard"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="menu-item {% if active_page == 'chat' %}active{% endif %}">
+                    <a href="{{ url_for('chat_route') }}">
+                        <i data-lucide="message-square"></i>
+                        <span>AI Tutor Chat</span>
+                    </a>
+                </li>
+                <li class="menu-item {% if active_page == 'study_plan' %}active{% endif %}">
+                    <a href="{{ url_for('study_plan_route') }}">
+                        <i data-lucide="calendar"></i>
+                        <span>Study Plan</span>
+                    </a>
+                </li>
+                <li class="menu-item {% if active_page == 'upload' %}active{% endif %}">
+                    <a href="{{ url_for('upload_route') }}">
+                        <i data-lucide="file-up"></i>
+                        <span>Upload Materials</span>
+                    </a>
+                </li>
+                <li class="menu-item {% if active_page == 'quiz' %}active{% endif %}">
+                    <a href="{{ url_for('quiz_route') }}">
+                        <i data-lucide="check-square"></i>
+                        <span>Quiz Generator</span>
+                    </a>
+                </li>
+                <li class="menu-item {% if active_page == 'weak_areas' %}active{% endif %}">
+                    <a href="{{ url_for('weak_areas_route') }}">
+                        <i data-lucide="trending-up"></i>
+                        <span>Weak Areas</span>
+                    </a>
+                </li>
+                <li class="menu-item {% if active_page == 'progress' %}active{% endif %}">
+                    <a href="{{ url_for('progress_route') }}">
+                        <i data-lucide="bar-chart-2"></i>
+                        <span>Progress Analytics</span>
+                    </a>
+                </li>
+            </ul>
+            
+            <div class="sidebar-footer">
+                <button class="theme-toggle" id="theme-toggle-btn" title="Toggle color scheme">
+                    <span id="theme-toggle-icon"><i data-lucide="sun"></i></span>
+                    <span id="theme-toggle-text">Light Mode</span>
+                </button>
+                
+                <div class="user-profile">
+                    <div class="user-avatar">
+                        {{ session.get('username', 'U')[0] | upper }}
+                    </div>
+                    <div class="user-info">
+                        <span class="user-name">{{ session.get('username', 'Student') }}</span>
+                        <span class="user-role">Free Learner</span>
+                    </div>
+                </div>
+                
+                <a href="{{ url_for('logout_route') }}" class="btn btn-secondary" style="padding: 0.5rem; display: flex; justify-content: center; gap: 0.5rem;">
+                    <i data-lucide="log-out"></i>
+                    <span>Log Out</span>
+                </a>
+            </div>
+        </aside>
+        {% endif %}
+        
+        <!-- Main Content Area -->
+        <main class="main-viewport" style="{% if not session.get('user_id') %}margin-left: 0; padding: 0;{% endif %}">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    
+    <!-- Shared App Scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+
+{% block title %}Study Plans - Learnmate AI{% endblock %}
+
+{% block content %}
+<div class="top-navbar">
+    <div class="page-title">
+        <h1>Study Plan Generator</h1>
+        <p>Set goals, schedule milestones, and track your daily learning routines.</p>
+    </div>
+</div>
+
+<div class="grid-cols-12 fade-in">
+    <!-- Left column: Generator Form & List -->
+    <div class="col-span-4" style="display:flex; flex-direction:column; gap:1.5rem;">
+        <!-- Form card -->
+        <div class="glass-card">
+            <h3 style="font-size:1.15rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="sparkles" style="color:var(--primary);"></i> Plan Builder</h3>
+            <form id="study-plan-form">
+                <div class="form-group">
+                    <label class="form-label" for="subject-input">Subject / Course Name</label>
+                    <input class="form-input" type="text" id="subject-input" required placeholder="e.g. Organic Chemistry, Calculus">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="goal-input">Specific Learning Goal</label>
+                    <input class="form-input" type="text" id="goal-input" required placeholder="e.g. Master stoichiometry, Pass Midterm">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="deadline-input">Deadline Date</label>
+                    <input class="form-input" type="date" id="deadline-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="hours-input">Hours Available Per Day</label>
+                    <input class="form-input" type="number" id="hours-input" min="1" max="12" value="2" required>
+                </div>
+                <button class="btn btn-primary" type="submit" style="width:100%; margin-top:0.5rem;">
+                    <i data-lucide="zap"></i> Generate with AI
+                </button>
+            </form>
+        </div>
+
+        <!-- Saved Plans Card -->
+        <div class="glass-card">
+            <h3 style="font-size:1.1rem; margin-bottom:0.75rem;"><i data-lucide="folder" style="color:var(--secondary)"></i> Saved Roadmaps</h3>
+            {% if saved_plans %}
+                <div style="display:flex; flex-direction:column; gap:0.5rem; max-height: 250px; overflow-y:auto;">
+                    {% for plan in saved_plans %}
+                        <div style="display:flex; gap:0.5rem; align-items:center;">
+                            <a href="{{ url_for('study_plan_route') }}?view={{ plan.id }}" 
+                               class="glass-card" 
+                               style="padding:0.75rem; border-color: {% if view_id == plan.id %}var(--primary){% else %}var(--border-color){% endif %}; text-decoration:none; flex:1; display:block; transition:all 0.2s ease;">
+                                <div style="font-weight:600; font-size:0.85rem; color:var(--text-primary);">{{ plan.subject }}</div>
+                                <span style="font-size:0.7rem; color:var(--text-muted);">Goal: {{ plan.goal }}</span>
+                            </a>
+                            <button class="btn btn-secondary delete-plan-btn" data-id="{{ plan.id }}" data-subject="{{ plan.subject }}" style="padding:0.4rem; color:var(--danger); border-color:transparent; background:transparent;" title="Delete study plan">
+                                <i data-lucide="trash-2" style="width:16px; height:16px;"></i>
+                            </button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p style="font-size:0.8rem; color:var(--text-muted);">No study plans created yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Right column: Schedule Display -->
+    <div class="col-span-8">
+        <div id="study-plan-output-container" style="display: {% if active_plan %}block{% else %}none{% endif %};">
+            <div id="study-plan-calendar">
+                {% if active_plan %}
+                    <!-- Render active study plan directly from Flask server variable -->
+                    <div class="glass-card fade-in" style="margin-bottom:1.5rem; background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), transparent)">
+                        <h3 style="color:var(--primary); font-size:1.4rem; margin-bottom:0.5rem;"><i data-lucide="award"></i> Master Study Plan: {{ active_plan.subject }}</h3>
+                        <p><strong>Goal:</strong> {{ active_plan.goal }}</p>
+                        <p><strong>Weekly Commitment:</strong> {{ active_plan.hours_per_day}} hrs/day until {{ active_plan.deadline }}</p>
+                    </div>
+
+                    <h4 style="margin: 2rem 0 1rem; font-size: 1.25rem;"><i data-lucide="compass"></i> Roadmap & Milestones</h4>
+                    <div class="study-plan-container">
+                        {% if active_plan.weekly_milestones %}
+                            {% for milestone in active_plan.weekly_milestones %}
+                                <div class="timeline-milestone fade-in">
+                                    <div class="milestone-title">Week {{ milestone.week }}: {{ milestone.focus }}</div>
+                                    <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom: 0.5rem;">Objective: {{ milestone.objective }}</p>
+                                    <ul class="milestone-tasks">
+                                        {% for task in milestone.tasks %}
+                                            <li class="task-item"><i data-lucide="check-circle" style="width:14px; height:14px; color:var(--success)"></i> {{ task }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <h4 style="margin: 2.5rem 0 1rem; font-size: 1.25rem;"><i data-lucide="calendar"></i> Daily Timetable Layout</h4>
+                    <div class="glass-card table-responsive fade-in" style="overflow-x:auto;">
+                        <table style="width:100%; border-collapse:collapse; text-align:left;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid var(--border-color); color:var(--text-secondary)">
+                                    <th style="padding: 10px;">Day</th>
+                                    <th style="padding: 10px;">Focus Topics</th>
+                                    <th style="padding: 10px;">Study Strategy & Method</th>
+                                    <th style="padding: 10px;">Est. Hours</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if active_plan.daily_schedule %}
+                                    {% for day in active_plan.daily_schedule %}
+                                        <tr style="border-bottom: 1px solid var(--border-color);">
+                                            <td style="padding: 12px; font-weight:600;">{{ day.day }}</td>
+                                            <td style="padding: 12px;">{{ day.topics }}</td>
+                                            <td style="padding: 12px;"><span class="source-badge" style="display:inline-block; background:var(--primary-glow)">{{ day.strategy }}</span></td>
+                                            <td style="padding: 12px; font-weight:500;">{{ day.hours }} hrs</td>
+                                        </tr>
+                                    {% endfor %}
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="glass-card fade-in" style="margin-top:2rem; border-left:4px solid var(--secondary); background:rgba(6, 182, 212, 0.03)">
+                        <h5 style="margin-bottom:0.5rem; font-size:1.1rem; color:var(--secondary)"><i data-lucide="info"></i> Intelligent Coach Advice</h5>
+                        <p style="font-size:0.9rem; line-height:1.5;">{{ active_plan.coach_advice }}</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Placeholder when no plan is selected -->
+        <div id="plan-placeholder-card" class="glass-card fade-in" style="text-align:center; padding:5rem 2rem; display: {% if active_plan %}none{% else %}block{% endif %};">
+            <div class="upload-icon" style="color:var(--primary)">
+                <i data-lucide="calendar"></i>
+            </div>
+            <h3>No Active Study Plan Selected</h3>
+            <p style="color:var(--text-secondary); max-width:400px; margin: 0.5rem auto 1.5rem; font-size:0.9rem;">
+                Set your study metrics in the form to generate a structured timeline schedule using AI or choose a saved one.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    setupStudyPlanPage();
+
+    // Event listener for deleting study plans
+    document.querySelectorAll('.delete-plan-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const planId = btn.getAttribute('data-id');
+            const subject = btn.getAttribute('data-subject');
+            if (confirm(`Are you sure you want to delete the study plan for "${subject}"?`)) {
+                try {
+                    const response = await fetch(`/api/delete-study-plan/${planId}`, { method: 'DELETE' });
+                    const data = await response.json();
+                    if (response.ok) {
+                        showToast(data.message || 'Plan deleted');
+                        // Redirect to main study-plan page to refresh list and reset view
+                        window.location.href = "{{ url_for('study_plan_route') }}";
+                    } else {
+                        showToast(data.error || 'Failed to delete plan', 'error');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast('Connection error', 'error');
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

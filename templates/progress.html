@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+
+{% block title %}Progress Analytics - Learnmate AI{% endblock %}
+
+{% block content %}
+<div class="top-navbar">
+    <div class="page-title">
+        <h1>Progress Analytics</h1>
+        <p>Review historical quiz trends, topic-wise scoring distribution, and completed milestones.</p>
+    </div>
+</div>
+
+<!-- Overview Cards -->
+<div class="grid-cols-12 fade-in">
+    <div class="col-span-4 glass-card stat-card">
+        <div class="stat-icon blue">
+            <i data-lucide="award"></i>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ avg_score | round(1) }}%</span>
+            <span class="stat-label">Average Quiz Score</span>
+        </div>
+    </div>
+
+    <div class="col-span-4 glass-card stat-card">
+        <div class="stat-icon green">
+            <i data-lucide="check-circle-2"></i>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ total_attempts }}</span>
+            <span class="stat-label">Quizzes Completed</span>
+        </div>
+    </div>
+
+    <div class="col-span-4 glass-card stat-card">
+        <div class="stat-icon purple">
+            <i data-lucide="file-text"></i>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ total_files }}</span>
+            <span class="stat-label">Reference Files Uploaded</span>
+        </div>
+    </div>
+</div>
+
+<!-- Analytics Charts -->
+<div class="grid-cols-12" style="margin-top: 1.5rem;">
+    <!-- Score Over Time Trend Chart -->
+    <div class="col-span-6 glass-card fade-in">
+        <h3 style="font-size:1.15rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="line-chart" style="color:var(--primary)"></i> Score Timeline Trend</h3>
+        <div style="position:relative; height: 260px;">
+            <canvas id="quizHistoryChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Topic Scores distribution Chart -->
+    <div class="col-span-6 glass-card fade-in">
+        <h3 style="font-size:1.15rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="bar-chart" style="color:var(--secondary)"></i> Subject-wise Performance</h3>
+        <div style="position:relative; height: 260px;">
+            <canvas id="topicPerformanceChart"></canvas>
+        </div>
+    </div>
+
+    <!-- History log table -->
+    <div class="col-span-12 glass-card fade-in" style="margin-top:0.5rem;">
+        <h3 style="font-size:1.15rem; margin-bottom:1rem;"><i data-lucide="history"></i> Practice History Log</h3>
+        
+        {% if attempts %}
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.9rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--border-color); color:var(--text-secondary)">
+                            <th style="padding:10px;">Date Completed</th>
+                            <th style="padding:10px;">Quiz Title / Topic</th>
+                            <th style="padding:10px;">Score Achieved</th>
+                            <th style="padding:10px;">Percentage Score</th>
+                            <th style="padding:10px; text-align:right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for att in attempts %}
+                            {% set pct = (att.score / att.total_questions) * 100 %}
+                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                <td style="padding:12px;">{{ att.created_at }}</td>
+                                <td style="padding:12px; font-weight:600;">{{ att.title }}</td>
+                                <td style="padding:12px;">{{ att.score }} / {{ att.total_questions }}</td>
+                                <td style="padding:12px;">
+                                    <span style="font-weight:600; color: {% if pct >= 75 %}var(--success){% elif pct >= 50 %}var(--warning){% else %}var(--danger){% endif %}">
+                                        {{ pct | round(1) }}%
+                                    </span>
+                                </td>
+                                <td style="padding:12px; text-align:right;">
+                                    <a href="/quiz" class="btn btn-secondary" style="padding:0.3rem 0.6rem; font-size:0.75rem;">Retake</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p style="color:var(--text-muted); text-align:center; padding:2rem 0;">No completed quiz data yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    setupProgressDashboard();
+</script>
+{% endblock %}

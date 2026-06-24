@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+
+{% block title %}Quiz Generator - Learnmate AI{% endblock %}
+
+{% block content %}
+<div class="top-navbar">
+    <div class="page-title">
+        <h1>Adaptive Quiz Generator</h1>
+        <p>Assess your comprehension with AI-generated Multiple Choice, True/False, or Short Answer tests.</p>
+    </div>
+</div>
+
+<div class="grid-cols-12 fade-in">
+    <!-- Left Configuration Panel -->
+    <div class="col-span-4">
+        <div class="glass-card">
+            <h3 style="font-size:1.15rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="cog" style="color:var(--primary)"></i> Test Settings</h3>
+            
+            <form id="quiz-generator-form">
+                <div class="form-group">
+                    <label class="form-label" for="quiz-topic-input">Quiz Topic / Concepts</label>
+                    <input class="form-input" type="text" id="quiz-topic-input" placeholder="e.g. Newton's laws of motion, Photosynthesis">
+                    <p style="font-size:0.7rem; color:var(--text-muted); margin-top:0.25rem;">Type a general topic to generate questions from LLM knowledge.</p>
+                </div>
+                
+                <div style="text-align:center; color:var(--text-muted); font-size:0.8rem; margin: 0.75rem 0; font-weight:600;">- OR -</div>
+
+                <div class="form-group">
+                    <label class="form-label" for="quiz-material-select">Reference Uploaded Notes</label>
+                    <select class="form-select" id="quiz-material-select">
+                        <option value="">-- Choose indexed material --</option>
+                        {% if files %}
+                            {% for file in files %}
+                                <option value="{{ file.id }}">{{ file.filename }}</option>
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                    <p style="font-size:0.7rem; color:var(--text-muted); margin-top:0.25rem;">Generate questions directly retrieved from study materials.</p>
+                </div>
+
+                <div class="form-group" style="margin-top:1.25rem;">
+                    <label class="form-label" for="quiz-difficulty-select">Difficulty Tier</label>
+                    <select class="form-select" id="quiz-difficulty-select">
+                        <option value="beginner">Beginner</option>
+                        <option value="intermediate" selected>Intermediate</option>
+                        <option value="advanced">Advanced</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="quiz-count-select">Number of Questions</label>
+                    <select class="form-select" id="quiz-count-select">
+                        <option value="3">3 Questions (Speed Test)</option>
+                        <option value="5" selected>5 Questions (Standard)</option>
+                        <option value="10">10 Questions (Comprehensive)</option>
+                    </select>
+                </div>
+
+                <button class="btn btn-primary" type="submit" style="width:100%; margin-top:0.75rem;">
+                    <i data-lucide="check-square"></i> Compile Practice Test
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Right Interaction Workspace -->
+    <div class="col-span-8">
+        <!-- Interactive Player Workspace -->
+        <div id="quiz-player-container" style="display:none;">
+            <div id="quiz-workspace">
+                <!-- Interactive quiz renders dynamically here -->
+            </div>
+        </div>
+
+        <!-- Initial Placeholder Card -->
+        <div id="quiz-placeholder-card" class="glass-card" style="text-align:center; padding: 6rem 2rem;">
+            <div class="upload-icon" style="color:var(--success)">
+                <i data-lucide="play-circle"></i>
+            </div>
+            <h3>Test Setup Ready</h3>
+            <p style="color:var(--text-secondary); max-width:400px; margin: 0.5rem auto 1.5rem; font-size:0.9rem;">
+                Specify a topic or match an uploaded document to let Gemini compile tailored evaluation questions.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    setupQuizPage();
+</script>
+{% endblock %}

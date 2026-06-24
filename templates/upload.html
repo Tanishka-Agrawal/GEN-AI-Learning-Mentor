@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}Upload Study Materials - Learnmate AI{% endblock %}
+
+{% block content %}
+<div class="top-navbar">
+    <div class="page-title">
+        <h1>Reference Library Uploader</h1>
+        <p>Sync course PDFs and text materials to feed the tutor RAG system.</p>
+    </div>
+</div>
+
+<div class="grid-cols-12 fade-in">
+    <!-- Left Column: Upload widget -->
+    <div class="col-span-6 glass-card">
+        <h3 style="font-size:1.15rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="file-up" style="color:var(--primary)"></i> Sync File Chunks</h3>
+        <p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5; margin-bottom:1.5rem;">
+            When you upload documents, the mentor parses the text, splits it into small logical chunks, and uses Gemini to generate mathematical embeddings. These embeddings are stored locally to allow instant factual retrieval during chat or testing.
+        </p>
+
+        <!-- Dropzone form -->
+        <div class="upload-dropzone" id="upload-dropzone">
+            <input type="file" id="file-input" style="display:none;" accept=".pdf,.txt">
+            <div class="upload-icon">
+                <i data-lucide="cloud-upload"></i>
+            </div>
+            <div class="upload-title">Drag & Drop notes here</div>
+            <div class="upload-subtitle">or click to browse local files (PDF, TXT - Max 15MB)</div>
+            <div class="upload-help-card" style="margin-top:1.5rem; text-align:left; padding:1rem; background:rgba(255,255,255,0.04); border-radius:14px; border:1px solid rgba(255,255,255,0.08);">
+                <strong style="display:block; margin-bottom:0.75rem; color:var(--text-primary);">Upload Checklist</strong>
+                <ul style="list-style:none; padding-left:0; color:var(--text-secondary); font-size:0.9rem; line-height:1.6;">
+                    <li>• Upload your class notes, textbook sections, or lecture PDFs.</li>
+                    <li>• The mentor indexes concepts and answers from your materials.</li>
+                    <li>• Use the AI Tutor to get answers grounded in your uploaded notes.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Uploaded library lists -->
+    <div class="col-span-6 glass-card">
+        <h3 style="font-size:1.15rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="book-open" style="color:var(--secondary)"></i> Active Study Resources</h3>
+        
+        {% if uploaded_materials %}
+            <p style="font-size:0.88rem; color:var(--text-muted); margin-bottom:1rem;">
+                The mentor uses these notes as your personal study library. Keep your key textbooks and summaries indexed for classroom-style tutoring.
+            </p>
+            <div class="file-list" id="file-list-container">
+                {% for file in uploaded_materials %}
+                    <div class="file-item fade-in">
+                        <div class="file-info">
+                            <i data-lucide="file-text" style="color:var(--secondary); width:20px; height:20px;"></i>
+                            <div>
+                                <span class="file-name" title="{{ file.filename }}">{{ file.filename }}</span>
+                                <div class="file-meta">
+                                    Size: {{ (file.file_size / 1024) | round(1) }} KB | Chunks: {{ file.num_chunks }}
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary delete-file-btn" data-id="{{ file.id }}" data-name="{{ file.filename }}" style="padding:0.4rem; color:var(--danger); border-color:transparent;" title="Delete and un-index notes">
+                            <i data-lucide="trash-2" style="width:16px; height:16px;"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div style="text-align:center; padding:5rem 1rem; color:var(--text-muted);">
+                <div style="font-size:2.5rem; margin-bottom:1rem; opacity:0.3;">
+                    <i data-lucide="folder-open"></i>
+                </div>
+                <h4>No Study Materials Found</h4>
+                <p style="font-size:0.85rem; max-width:300px; margin: 0.5rem auto;">
+                    Upload notes or reading materials to provide context to the Adaptive AI Tutor.
+                </p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    setupUploadPage();
+</script>
+{% endblock %}

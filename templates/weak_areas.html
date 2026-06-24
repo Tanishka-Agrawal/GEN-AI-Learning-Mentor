@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+
+{% block title %}Weak Area Analysis - Learnmate AI{% endblock %}
+
+{% block content %}
+<div class="top-navbar">
+    <div class="page-title">
+        <h1>Weak Area Diagnostics</h1>
+        <p>A review of concepts where your scores fell below 75%, paired with study recommendations.</p>
+    </div>
+</div>
+
+<div class="grid-cols-12 fade-in">
+    <!-- Analysis Summary Card -->
+    <div class="col-span-4" style="display:flex; flex-direction:column; gap:1.5rem;">
+        <div class="glass-card">
+            <h3 style="font-size:1.15rem; margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="activity" style="color:var(--primary);"></i> Performance Health</h3>
+            <p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5; margin-bottom:1.25rem;">
+                Our diagnostic engine tracks your quiz completions and groups incorrect answers by topic. Core areas requiring focus are highlighted below.
+            </p>
+            <div style="border-top:1px solid var(--border-color); padding-top:1rem; display:flex; flex-direction:column; gap:0.75rem;">
+                <div style="display:flex; justify-content:space-between; font-size:0.85rem;">
+                    <span>Critical Topics (<50%)</span>
+                    <strong style="color:var(--danger)">{{ critical_count }}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.85rem;">
+                    <span>Warning Topics (50-75%)</span>
+                    <strong style="color:var(--warning)">{{ warning_count }}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.85rem;">
+                    <span>Healthy Topics (>=75%)</span>
+                    <strong style="color:var(--success)">{{ healthy_count }}</strong>
+                </div>
+            </div>
+            
+            {% if critical_count > 0 or warning_count > 0 %}
+                <div style="margin-top:1.5rem;">
+                    <a href="{{ url_for('quiz_route') }}" class="btn btn-primary" style="width:100%;"><i data-lucide="refresh-cw"></i> Take Review Quiz</a>
+                </div>
+            {% endif %}
+        </div>
+        
+        <div class="glass-card" style="background:rgba(6, 182, 212, 0.02)">
+            <h4 style="font-size:0.95rem; margin-bottom:0.5rem; color:var(--secondary);"><i data-lucide="shield-alert"></i> Revision Strategies</h4>
+            <ul style="font-size:0.75rem; color:var(--text-secondary); padding-left:15px; display:flex; flex-direction:column; gap:0.5rem; line-height:1.4;">
+                <li><strong>Active Recall</strong>: Close your notes and write everything you remember about a weak area before looking up the answer.</li>
+                <li><strong>Feynman Technique</strong>: Try explaining the topic to our AI Tutor using simple terms as if teaching a child.</li>
+                <li><strong>Spaced Repetition</strong>: Review these concepts again tomorrow, then 3 days later, then next week.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Active Weak Areas list -->
+    <div class="col-span-8">
+        <div class="glass-card">
+            <h3 style="font-size:1.15rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="trending-up" style="color:var(--accent);"></i> Targeted Knowledge Deficits</h3>
+            
+            {% if weak_areas %}
+                <div style="display:flex; flex-direction:column; gap:1.25rem;">
+                    {% for area in weak_areas %}
+                        {% set score = area.score_percentage | round(1) %}
+                        {% set bar_color = 'red' if score < 50 else 'orange' %}
+                        
+                        <div class="weak-area-item fade-in">
+                            <div class="weak-area-header">
+                                <div>
+                                    <strong style="font-size:1.1rem; color:var(--text-primary);">{{ area.topic }}</strong>
+                                    <span style="font-size:0.75rem; color:var(--text-muted); margin-left:0.5rem;">attempts: {{ area.total_attempts }}</span>
+                                </div>
+                                <span style="font-weight:700; color: {% if bar_color == 'red' %}var(--danger){% else %}var(--warning){% endif %}; font-size:1.1rem;">
+                                    {{ score }}%
+                                </span>
+                            </div>
+                            
+                            <!-- Visual progress bar -->
+                            <div class="progress-bar-container" style="margin-bottom: 1rem;">
+                                <div class="progress-bar-fill {{ bar_color }}" style="width: {{ score }}%;"></div>
+                            </div>
+                            
+                            <!-- AI Recommended Remediation Actions -->
+                            <div style="background:rgba(255,255,255,0.01); border: 1px solid var(--border-color); border-radius:8px; padding:1rem;">
+                                <h5 style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.25rem;"><i data-lucide="compass" style="width:14px; height:14px;"></i> Recommended Actions:</h5>
+                                <ul style="font-size:0.8rem; color:var(--text-secondary); padding-left:15px; display:flex; flex-direction:column; gap:0.35rem;">
+                                    {% if area.recommendations %}
+                                        {% for rec in area.recommendations %}
+                                            <li>{{ rec }}</li>
+                                        {% endfor %}
+                                    {% else %}
+                                        <li>Review lecture slides and ask AI Tutor to explain fundamentals.</li>
+                                        <li>Generate a focused 3-question MCQ quiz on this specific topic.</li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                            
+                            <div style="display:flex; justify-content:flex-end; margin-top:0.75rem;">
+                                <a href="{{ url_for('chat_route') }}?topic={{ area.topic | urlencode }}" class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem;">
+                                    <i data-lucide="message-square"></i> Ask Tutor to Explain
+                                </a>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div style="text-align:center; padding:5rem 1rem; color:var(--text-muted);">
+                    <div style="font-size:3rem; margin-bottom:1rem; color:var(--success); opacity:0.6;">
+                        <i data-lucide="award"></i>
+                    </div>
+                    <h4>Academic Standing is Healthy!</h4>
+                    <p style="font-size:0.9rem; max-width:400px; margin: 0.5rem auto;">
+                        Fantastic work! You have completed all quizzes with scores above 75%. Keep studying to maintain this standard.
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}Learnmate AI - AI Study Coach{% endblock %}
+
+{% block content %}
+<div class="landing-hero fade-in">
+    <div class="hero-badge">AI-Powered Cognitive Education</div>
+    <h2 class="hero-title">Your Personalized Learnmate AI Coach</h2>
+    <p class="hero-desc">
+        Create structured study schedules, upload course files for RAG contextual questions, generate interactive tests, identify performance deficits, and discuss topics with your personal academic advisor.
+    </p>
+    
+    <div style="display:flex; gap:1rem; justify-content:center; margin-bottom: 4rem;">
+        <a href="{{ url_for('auth_route') }}" class="btn btn-primary" style="padding: 1rem 2rem; font-size:1.05rem;">
+            <i data-lucide="rocket"></i> Launch Free Dashboard
+        </a>
+        <a href="#features" class="btn btn-secondary" style="padding: 1rem 2rem; font-size:1.05rem;">
+            Explore Features <i data-lucide="arrow-down"></i>
+        </a>
+    </div>
+
+    <!-- Features Section -->
+    <div id="features" class="grid-cols-12" style="width:100%; max-width:1100px; margin-top:2rem;">
+        <div class="col-span-4 glass-card feature-card">
+            <div class="feature-icon-box">
+                <i data-lucide="message-square"></i>
+            </div>
+            <h4 style="margin-bottom:0.5rem; font-size:1.15rem;">Adaptive AI Tutor</h4>
+            <p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5;">
+                Engage in academic discussions with a context-aware chat assistant that scales explanations to your current knowledge.
+            </p>
+        </div>
+        
+        <div class="col-span-4 glass-card feature-card">
+            <div class="feature-icon-box" style="color:var(--secondary)">
+                <i data-lucide="file-up"></i>
+            </div>
+            <h4 style="margin-bottom:0.5rem; font-size:1.15rem;">RAG Document Sync</h4>
+            <p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5;">
+                Upload notes and PDFs. The system indexes your documents to answer complex queries directly referenced from your materials.
+            </p>
+        </div>
+
+        <div class="col-span-4 glass-card feature-card">
+            <div class="feature-icon-box" style="color:var(--accent)">
+                <i data-lucide="calendar"></i>
+            </div>
+            <h4 style="margin-bottom:0.5rem; font-size:1.15rem;">Study Plan Generator</h4>
+            <p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5;">
+                Input your exam date and target subjects. Get a customized daily learning timetable, milestones, and revision trackers.
+            </p>
+        </div>
+
+        <div class="col-span-4 glass-card feature-card" style="margin-top:1.5rem;">
+            <div class="feature-icon-box" style="color:var(--success)">
+                <i data-lucide="check-square"></i>
+            </div>
+            <h4 style="margin-bottom:0.5rem; font-size:1.15rem;">Quiz Compiler</h4>
+            <p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5;">
+                Generate customized Multiple Choice, True/False, or Short Answer test questions derived directly from your notes.
+            </p>
+        </div>
+
+        <div class="col-span-4 glass-card feature-card" style="margin-top:1.5rem;">
+            <div class="feature-icon-box" style="color:var(--warning)">
+                <i data-lucide="activity"></i>
+            </div>
+            <h4 style="margin-bottom:0.5rem; font-size:1.15rem;">Weak Area Identification</h4>
+            <p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5;">
+                Get automatic diagnostics on incorrect test responses, detecting content gaps and presenting curated recommendations.
+            </p>
+        </div>
+
+        <div class="col-span-4 glass-card feature-card" style="margin-top:1.5rem;">
+            <div class="feature-icon-box" style="color:var(--danger)">
+                <i data-lucide="bar-chart-2"></i>
+            </div>
+            <h4 style="margin-bottom:0.5rem; font-size:1.15rem;">Progress Dashboard</h4>
+            <p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5;">
+                Monitor your study metrics, quiz score timeline trends, and target completions in a single visual layout.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

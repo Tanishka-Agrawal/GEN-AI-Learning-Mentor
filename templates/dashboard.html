@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Learnmate AI{% endblock %}
+
+{% block content %}
+<div class="top-navbar">
+    <div class="page-title">
+        <h1>Dashboard</h1>
+        <p>Welcome back, {{ session.get('username') }}! Let's resume your learning journey.</p>
+    </div>
+</div>
+
+<!-- Stats Row -->
+<div class="grid-cols-12 fade-in">
+    <div class="col-span-3 glass-card stat-card">
+        <div class="stat-icon blue">
+            <i data-lucide="book-open"></i>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ stats.plans_count }}</span>
+            <span class="stat-label">Active Plans</span>
+        </div>
+    </div>
+    
+    <div class="col-span-3 glass-card stat-card">
+        <div class="stat-icon green">
+            <i data-lucide="file-text"></i>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ stats.materials_count }}</span>
+            <span class="stat-label">Uploaded Notes</span>
+        </div>
+    </div>
+
+    <div class="col-span-3 glass-card stat-card">
+        <div class="stat-icon purple">
+            <i data-lucide="check-square"></i>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ stats.quizzes_count }}</span>
+            <span class="stat-label">Quizzes Completed</span>
+        </div>
+    </div>
+
+    <div class="col-span-3 glass-card stat-card">
+        <div class="stat-icon orange">
+            <i data-lucide="zap"></i>
+        </div>
+        <div class="stat-info">
+            <span class="stat-value">{{ stats.weak_areas_count }}</span>
+            <span class="stat-label">Weak Areas Flagged</span>
+        </div>
+    </div>
+</div>
+
+<!-- Interactive Dashboards Content -->
+<div class="grid-cols-12" style="margin-top: 1.5rem;">
+    <!-- Active Study Plans -->
+    <div class="col-span-6 glass-card fade-in">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h3 style="font-size:1.15rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="calendar" style="color:var(--primary);"></i> Ongoing Study Plans</h3>
+            <a href="{{ url_for('study_plan_route') }}" class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.8rem;">Create New</a>
+        </div>
+
+        {% if recent_plans %}
+            <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                {% for plan in recent_plans[:3] %}
+                    <div class="glass-card" style="padding:0.8rem 1rem; border-color:var(--border-color); display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <strong style="font-size:0.95rem; color:var(--text-primary);">{{ plan.subject }}</strong>
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;">Goal: {{ plan.goal }}</p>
+                        </div>
+                        <a href="{{ url_for('study_plan_route') }}?view={{ plan.id }}" class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem;">
+                            View Roadmap
+                        </a>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div style="text-align:center; padding:2rem 0; color:var(--text-muted); font-size:0.9rem;">
+                No active study plans yet. Generate one with AI.
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Recent Uploads / Notes -->
+    <div class="col-span-6 glass-card fade-in">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h3 style="font-size:1.15rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="file-up" style="color:var(--secondary)"></i> Recent Study Materials</h3>
+            <a href="{{ url_for('upload_route') }}" class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.8rem;">Manage Files</a>
+        </div>
+
+        {% if recent_materials %}
+            <div style="display:flex; flex-direction:column; gap:0.6rem;">
+                {% for material in recent_materials[:4] %}
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding:0.6rem 0.8rem; border:1px solid var(--border-color); border-radius:8px; background:rgba(255,255,255,0.02)">
+                        <div class="file-info" style="gap:0.5rem;">
+                            <i data-lucide="file-text" style="color:var(--secondary); width:16px; height:16px;"></i>
+                            <span style="font-size:0.85rem; font-weight:500; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; max-width:220px;">{{ material.filename }}</span>
+                        </div>
+                        <span style="font-size:0.75rem; color:var(--text-muted);">{{ material.num_chunks }} chunks</span>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div style="text-align:center; padding:2rem 0; color:var(--text-muted); font-size:0.9rem;">
+                No notes uploaded. Sync PDFs to start context learning.
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Latest Quiz & Analysis -->
+    <div class="col-span-8 glass-card fade-in" style="margin-top:0.5rem;">
+        <h3 style="font-size:1.15rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="check-square" style="color:var(--accent);"></i> Recent Quiz Attempt</h3>
+        
+        {% if last_quiz %}
+            <div class="glass-card" style="padding:1rem; border-color:var(--border-color); background:linear-gradient(135deg, rgba(168, 85, 247, 0.03), transparent)">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                    <div>
+                        <h4 style="font-size:1.05rem;">{{ last_quiz.title }}</h4>
+                        <p style="font-size:0.75rem; color:var(--text-muted);">Completed: {{ last_quiz.created_at }}</p>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-size:1.8rem; font-weight:700; color:var(--accent);">{{ last_quiz.score }}</span>
+                        <span style="font-size:1rem; color:var(--text-secondary);">/ {{ last_quiz.total_questions }}</span>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:flex-end;">
+                    <a href="/progress" class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.8rem; display:inline-flex; align-items:center; gap:0.25rem;">
+                        <i data-lucide="bar-chart-2" style="width:14px; height:14px;"></i> View Score Analytics
+                    </a>
+                </div>
+            </div>
+        {% else %}
+            <div style="text-align:center; padding:3rem 0; color:var(--text-muted); font-size:0.9rem;">
+                No quizzes taken yet. Assess your memory retention!
+                <div style="margin-top:1rem;">
+                    <a href="{{ url_for('quiz_route') }}" class="btn btn-primary" style="padding:0.5rem 1rem; font-size:0.85rem;"><i data-lucide="play"></i> Build Practice Quiz</a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- AI Coach Action Box -->
+    <div class="col-span-4 glass-card fade-in" style="margin-top:0.5rem; background: linear-gradient(135deg, var(--primary-glow) 0%, transparent 100%);">
+        <h3 style="font-size:1.15rem; margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="zap" style="color:var(--primary);"></i> AI Mentor Coach</h3>
+        <p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5; margin-bottom:1.5rem;">
+            Ready to learn something new? Ask questions regarding your indexed materials or general course syllabus topics.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+            <a href="{{ url_for('chat_route') }}" class="btn btn-primary" style="width:100%;"><i data-lucide="message-square"></i> Open AI Tutor Chat</a>
+            <a href="{{ url_for('weak_areas_route') }}" class="btn btn-secondary" style="width:100%;"><i data-lucide="trending-up"></i> Diagnostics Reports</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

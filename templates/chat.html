@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}AI Tutor - Learnmate AI{% endblock %}
+
+{% block content %}
+<div class="top-navbar">
+    <div class="page-title">
+        <h1>AI Tutor Chat</h1>
+        <p>Interactive tutoring and document-grounded question answering.</p>
+    </div>
+</div>
+
+<div class="grid-cols-12 fade-in">
+    <!-- Configuration panel -->
+    <div class="col-span-4 glass-card">
+        <h3 style="font-size:1.15rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="sliders" style="color:var(--primary);"></i> Tutor Context Settings</h3>
+        
+        <div class="form-group" style="margin-bottom:1.5rem;">
+            <label class="form-label" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+                <span>Use Uploaded Materials (RAG)</span>
+                <input type="checkbox" id="use-rag-context" checked style="width:18px; height:18px; cursor:pointer;">
+            </label>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.25rem;">
+                When checked, the AI retrieves chunks from your uploaded documents to ground its response before answering.
+            </p>
+        </div>
+
+        <div style="border-top:1px solid var(--border-color); padding-top:1rem; margin-top:1rem;">
+            <h4 style="font-size:0.9rem; margin-bottom:0.75rem; color:var(--text-secondary);">Available Reference Library</h4>
+            {% if materials_count > 0 %}
+                <p style="font-size:0.8rem; color:var(--success); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.25rem;">
+                    <i data-lucide="check-circle" style="width:14px; height:14px;"></i> {{ materials_count }} active files indexed.
+                </p>
+                <div style="max-height:160px; overflow-y:auto; display:flex; flex-direction:column; gap:0.4rem;">
+                    {% for file in files %}
+                        <div style="font-size:0.75rem; color:var(--text-secondary); display:flex; align-items:center; gap:0.35rem; padding:0.25rem; background:rgba(0,0,0,0.1); border-radius:4px;">
+                            <i data-lucide="file-text" style="width:12px; height:12px; color:var(--secondary)"></i>
+                            <span style="white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">{{ file.filename }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p style="font-size:0.8rem; color:var(--warning); line-height:1.4;">
+                    No materials indexed yet. AI will default to general academic model settings until you upload study notes.
+                </p>
+                <a href="{{ url_for('upload_route') }}" class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.8rem; margin-top:0.5rem; width:100%;"><i data-lucide="file-up"></i> Upload Materials Now</a>
+            {% endif %}
+        </div>
+
+        <div style="border-top:1px solid var(--border-color); padding-top:1.25rem; margin-top:1.5rem; background:rgba(99, 102, 241, 0.02); padding:1rem; border-radius:8px;">
+            <h5 style="margin-bottom:0.5rem; font-size:0.85rem; color:var(--primary); font-weight:600;"><i data-lucide="info"></i> Prompt Suggestion</h5>
+            <ul style="font-size:0.75rem; color:var(--text-secondary); padding-left:15px; display:flex; flex-direction:column; gap:0.4rem;">
+                <li>"Explain the core concept of [Topic] in step-by-step detail."</li>
+                <li>"Summarize my uploaded notes on [Subject] in bullet points."</li>
+                <li>"I don't understand how [Equation/Formula] works, walk me through a practice example."</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Chat client window -->
+    <div class="col-span-8">
+        <div class="chat-container">
+            <div class="chat-header">
+                <div class="tutor-avatar-row">
+                    <div class="user-avatar" style="background: linear-gradient(135deg, var(--primary), var(--secondary))">AI</div>
+                    <div>
+                        <strong style="font-size:0.95rem;">Academic Coach</strong>
+                        <div style="font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:0.25rem;">
+                            <span class="tutor-indicator"></span> Online
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem;" id="clear-chat-history" onclick="window.location.reload();">
+                    <i data-lucide="refresh-cw" style="width:12px; height:12px;"></i> Clear History
+                </button>
+            </div>
+            
+            <div class="chat-history" id="chat-history-box">
+                <!-- Welcome bubble -->
+                <div class="chat-bubble ai">
+                    Hello! I am your AI Study Mentor. 
+                    <br><br>
+                    If you have <strong>RAG Mode</strong> enabled and uploaded reference material, I will consult your notes first to formulate responses. Otherwise, I can explain any general academic topic, clarify formulas, or draft study strategies. 
+                    <br><br>
+                    What subject are we reviewing today?
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <textarea class="chat-textbox" id="chat-input" placeholder="Ask a question about your files or study goals..." rows="1"></textarea>
+                <button class="btn btn-primary" id="send-chat-btn" style="padding: 0.85rem 1.25rem; border-radius: 12px;">
+                    <i data-lucide="send"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    setupChatPage();
+</script>
+{% endblock %}

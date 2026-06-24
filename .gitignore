@@ -1,0 +1,29 @@
+# Environments and Keys
+.env
+.env.local
+.env.development
+.env.production
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Local databases and Flask instances
+instance/
+*.db
+*.db-journal
+
+# User upload storage
+uploads/*
+!uploads/.gitkeep
+
+# Operating system files
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+.gemini/
