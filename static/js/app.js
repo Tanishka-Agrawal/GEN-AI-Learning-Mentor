@@ -359,6 +359,7 @@ function setupStudyPlanPage() {
             if (response.ok) {
                 showToast('Study Plan generated and saved!');
                 renderStudyPlan(data.plan);
+                setTimeout(() => window.location.reload(), 1500);
             } else {
                 calendarView.innerHTML = `<div style="color:var(--danger)">Error: ${data.error || 'Failed to construct study plan.'}</div>`;
             }
@@ -466,6 +467,13 @@ function setupQuizPage() {
 
     generatorForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        const paywallCard = document.getElementById('pricing-paywall-card');
+        if (paywallCard && paywallCard.dataset.showPricing === 'true') {
+            paywallCard.scrollIntoView({ behavior: 'smooth' });
+            showToast('Free quiz attempts are used up. Upgrade to continue.', 'info');
+            return;
+        }
         
         const topic = document.getElementById('quiz-topic-input').value.trim();
         const materialId = document.getElementById('quiz-material-select').value;

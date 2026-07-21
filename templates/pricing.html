@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block title %}Pricing - Learnmate AI{% endblock %}
+
+{% block content %}
+<div class="top-navbar">
+    <div class="page-title">
+        <h1>Upgrade your plan</h1>
+        <p>Unlock unlimited AI tutor access and premium features.</p>
+    </div>
+</div>
+
+<div class="grid-cols-12 fade-in" style="gap: 1rem; padding: 1rem 0;">
+    <div class="col-span-4 glass-card" style="padding: 1.2rem; border-radius: 16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.8rem;">
+            <h3 style="margin:0; font-size:1.1rem;">Free</h3>
+            <span class="source-badge">Starter</span>
+        </div>
+        <div style="font-size:2rem; font-weight:800; margin-bottom:0.6rem;">₹0</div>
+        <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:1rem;">2 AI tutor attempts included.</p>
+        <ul style="padding-left:1rem; color:var(--text-secondary); line-height:1.7;">
+            <li>2 AI Tutor attempts</li>
+            <li>Basic quiz access</li>
+            <li>Limited study plans</li>
+        </ul>
+    </div>
+
+    <div class="col-span-4 glass-card" style="padding: 1.2rem; border-radius: 16px; border:1px solid rgba(99, 102, 241, 0.25);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.8rem;">
+            <h3 style="margin:0; font-size:1.1rem;">Monthly</h3>
+            <span class="source-badge" style="background: rgba(99,102,241,0.16); color: var(--primary);">Popular</span>
+        </div>
+        <div style="font-size:2rem; font-weight:800; margin-bottom:0.6rem;">₹299<span style="font-size:1rem; color:var(--text-secondary);">/month</span></div>
+        <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:1rem;">Unlimited AI tutor usage and more.</p>
+        <ul style="padding-left:1rem; color:var(--text-secondary); line-height:1.7;">
+            <li>Unlimited AI Tutor</li>
+            <li>Unlimited PDFs</li>
+            <li>Unlimited Quizzes</li>
+            <li>Personalized Study Plans</li>
+            <li>Priority Support</li>
+        </ul>
+        <button class="btn btn-primary" type="button" onclick="buyPlan('monthly')" style="width:100%; margin-top:1rem;">Upgrade Monthly</button>
+    </div>
+
+    <div class="col-span-4 glass-card" style="padding: 1.2rem; border-radius: 16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.8rem;">
+            <h3 style="margin:0; font-size:1.1rem;">Yearly</h3>
+            <span class="source-badge" style="background: rgba(16,185,129,0.16); color: var(--success);">Best Value</span>
+        </div>
+        <div style="font-size:2rem; font-weight:800; margin-bottom:0.6rem;">₹3200<span style="font-size:1rem; color:var(--text-secondary);">/year</span></div>
+        <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:1rem;">Everything in Monthly, billed yearly.</p>
+        <ul style="padding-left:1rem; color:var(--text-secondary); line-height:1.7;">
+            <li>Everything in Monthly</li>
+            <li>Save money compared to monthly</li>
+            <li>Priority support</li>
+        </ul>
+        <button class="btn btn-secondary" type="button" onclick="buyPlan('yearly')" style="width:100%; margin-top:1rem;">Upgrade Yearly</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function buyPlan(plan) {
+    try {
+        const response = await fetch('/api/create-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plan })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            alert(data.error || 'Unable to create order.');
+            return;
+        }
+        alert('Razorpay order created for ' + plan + '. Integrate with Razorpay checkout to complete payment.');
+        await fetch('/api/verify-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ razorpay_payment_id: 'demo_payment', razorpay_order_id: data.order_id, razorpay_signature: 'demo_signature', plan })
+        });
+        window.location.href = '/dashboard';
+    } catch (err) {
+        console.error(err);
+        alert('Payment flow failed.');
+    }
+}
+</script>
+{% endblock %}

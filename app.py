@@ -1,7 +1,15 @@
 import os
 import json
 import sqlite3
+import hashlib
+import hmac
+import random
+import time
+import re
+import smtplib
+from email.mime.text import MIMEText
 from datetime import datetime
+from functools import wraps
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 
 import database
@@ -14,12 +22,15 @@ load_dotenv()
 app = Flask(__name__)
 # Secure secret key loading
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback_mentor_sec_key_2026")
+FREE_QUIZ_ATTEMPTS = 2
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SECURE'] = False
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+REGISTRATION_LOG_PATH = os.path.join(os.path.dirname(__file__), 'instance', 'registration_events.log')
+os.makedirs(os.path.dirname(REGISTRATION_LOG_PATH), exist_ok=True)
 
 # Import google-generativeai client
 import google.generativeai as genai
@@ -28,6 +39,8 @@ if api_key and not api_key.startswith("your_") and api_key.strip():
     genai.configure(api_key=api_key)
 else:
     api_key = None
+
+FREE_QUIZ_ATTEMPTS = 2
 
 # Helper function to clean and parse JSON from LLM outputs
 def clean_and_parse_json(text):
@@ -62,17 +75,63 @@ def clean_and_parse_json(text):
                 print(f"Fallback parse failed: {e2}")
         return None
 
+
+def log_registration_notification(username, user_id):
+    """Emit a backend notification for a newly registered user."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    message = f"[{timestamp}] NEW REGISTRATION - username='{username}', user_id={user_id}"
+    print(message, flush=True)
+    with open(REGISTRATION_LOG_PATH, 'a', encoding='utf-8') as handle:
+        handle.write(message + "\n")
+    return message
+
+
+def sync_user_session(user_id):
+    """Synchronize the session with the current subscription and free-attempt state."""
+    user = database.get_user_by_id(user_id)
+    if not user:
+        return False
+
+    database.ensure_user_subscription_defaults(user_id)
+    user = database.get_user_by_id(user_id)
+    session['plan'] = (user.get('plan') or 'free').lower()
+    plan = session['plan']
+    if plan in ('monthly', 'yearly') or user.get('username') == 'tanishka253':
+        session['attempts_left'] = -1
+        session['quiz_attempts_left'] = -1
+        session['plan_attempts_left'] = -1
+    else:
+        used_quiz_attempts = len(database.get_quiz_attempts(user_id))
+        used_plan_attempts = len(database.get_study_plans(user_id))
+        session['quiz_attempts_left'] = max(0, FREE_QUIZ_ATTEMPTS - used_quiz_attempts)
+        session['plan_attempts_left'] = max(0, 2 - used_plan_attempts)
+        session['attempts_left'] = session['quiz_attempts_left']
+    session['payment_status'] = user.get('payment_status') or 'pending'
+    session['subscription_expiry'] = user.get('subscription_expiry')
+    return True
+
 # Middleware to require login
 @app.before_request
 def require_login():
     # Endpoints that are accessible without login
-    allowed_routes = ['landing_route', 'auth_route', 'login_route', 'register_route', 'static']
+    allowed_routes = [
+        'landing_route', 'auth_route', 'login_route', 'register_route', 'static', 'pricing_route',
+        'api_start_register', 'api_verify_otp', 'api_resend_otp'
+    ]
+    if request.path.startswith('/api/start-register') or request.path.startswith('/api/verify-otp') or request.path.startswith('/api/resend-otp'):
+        return
     if request.endpoint in allowed_routes or request.path.startswith('/static') or request.path == '/favicon.ico':
+        if 'user_id' in session:
+            sync_user_session(session['user_id'])
         return
     if 'user_id' not in session:
         if request.path.startswith('/api/'):
             return jsonify({'error': 'Authentication required.'}), 401
         return redirect(url_for('auth_route'))
+
+    user = database.get_user_by_id(session['user_id'])
+    if user:
+        sync_user_session(session['user_id'])
 
 # --- WEB PAGE ROUTING ---
 
@@ -82,12 +141,184 @@ def landing_route():
         return redirect(url_for('dashboard_route'))
     return render_template('landing.html')
 
-@app.route('/auth')
+@app.route('/auth', methods=['GET'])
 def auth_route():
     if 'user_id' in session:
         return redirect(url_for('dashboard_route'))
     tab = request.args.get('tab', 'login')
     return render_template('auth.html', tab=tab)
+
+def validate_password_strength(password, username=''):
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long."
+    if not re.search(r"[A-Z]", password):
+        return False, "Password must contain at least one uppercase letter."
+    if not re.search(r"[a-z]", password):
+        return False, "Password must contain at least one lowercase letter."
+    if not re.search(r"\d", password):
+        return False, "Password must contain at least one number."
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        return False, "Password must contain at least one special character."
+    if username and username.lower() in password.lower():
+        return False, "Password cannot contain your username."
+    return True, ""
+
+def generate_otp():
+    return str(random.randint(100000, 999999))
+
+def _is_placeholder(val):
+    if not val:
+        return True
+    val_upper = val.upper().strip()
+    return "YOUR_" in val_upper or "CHANGE_THIS" in val_upper or val_upper == "PLACEHOLDER"
+
+def _otp_dev_mode_enabled():
+    """Simulate OTP delivery when no provider credentials are configured (local dev)."""
+    flag = os.getenv("OTP_DEV_MODE", "").strip().lower()
+    if flag in ("1", "true", "yes"):
+        return True
+        
+    smtp_configured = bool(
+        os.getenv("SMTP_SERVER") and not _is_placeholder(os.getenv("SMTP_SERVER")) and
+        os.getenv("SMTP_USERNAME") and not _is_placeholder(os.getenv("SMTP_USERNAME")) and
+        os.getenv("SMTP_PASSWORD") and not _is_placeholder(os.getenv("SMTP_PASSWORD"))
+    )
+    sms_configured = bool(
+        (os.getenv("TWILIO_ACCOUNT_SID") and not _is_placeholder(os.getenv("TWILIO_ACCOUNT_SID")) and
+         os.getenv("TWILIO_AUTH_TOKEN") and not _is_placeholder(os.getenv("TWILIO_AUTH_TOKEN")) and
+         os.getenv("TWILIO_FROM_NUMBER") and not _is_placeholder(os.getenv("TWILIO_FROM_NUMBER")))
+        or (os.getenv("FAST2SMS_API_KEY") and not _is_placeholder(os.getenv("FAST2SMS_API_KEY")))
+    )
+    
+    if flag in ("0", "false", "no"):
+        if not smtp_configured and not sms_configured:
+            print("[DEV OPT FALLBACK] SMTP and SMS credentials are unconfigured or placeholders. Overriding to simulated delivery.", flush=True)
+            return True
+        return False
+        
+    return not smtp_configured and not sms_configured
+
+def send_email_otp(email, otp_code):
+    if _otp_dev_mode_enabled():
+        print(
+            f"[MAIL OTP DEV] Simulated email delivery to {email}. OTP: {otp_code}",
+            flush=True,
+        )
+        return True
+
+    smtp_server = os.getenv("SMTP_SERVER")
+    smtp_port = os.getenv("SMTP_PORT", "587")
+    smtp_username = os.getenv("SMTP_USERNAME")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    
+    body = (
+        "Welcome to Learnmate AI!\n\n"
+        f"Your verification code is:\n\n{otp_code}\n\n"
+        "This code expires in 5 minutes.\n"
+    )
+    
+    if not smtp_server or not smtp_username or not smtp_password:
+        print("[SMTP ERROR] SMTP settings not configured. Please set SMTP_SERVER, SMTP_USERNAME, and SMTP_PASSWORD in .env file.", flush=True)
+        return False
+        
+    try:
+        msg = MIMEText(body)
+        msg['Subject'] = 'Verify your Learnmate AI account'
+        msg['From'] = smtp_username
+        msg['To'] = email
+        
+        port = int(smtp_port)
+        if port == 465:
+            server = smtplib.SMTP_SSL(smtp_server, port)
+            server.login(smtp_username, smtp_password)
+        else:
+            server = smtplib.SMTP(smtp_server, port)
+            server.starttls()
+            server.login(smtp_username, smtp_password)
+            
+        server.sendmail(smtp_username, [email], msg.as_string())
+        server.quit()
+        print(f"[SMTP SUCCESS] Email sent successfully to {email}", flush=True)
+        return True
+    except Exception as e:
+        print(f"[SMTP ERROR] Failed to send email to {email}: {e}", flush=True)
+        return False
+
+def send_sms_otp(phone, otp_code):
+    if _otp_dev_mode_enabled():
+        print(
+            f"[SMS OTP DEV] Simulated SMS delivery to {phone}. OTP: {otp_code}",
+            flush=True,
+        )
+        return True
+
+    twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+    twilio_from = os.getenv("TWILIO_FROM_NUMBER")
+    fast2sms_api_key = os.getenv("FAST2SMS_API_KEY")
+    
+    if twilio_sid and twilio_token and twilio_from:
+        try:
+            import urllib.request
+            import urllib.parse
+            import base64
+            
+            url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json"
+            data = urllib.parse.urlencode({
+                'From': twilio_from,
+                'To': phone,
+                'Body': f"Welcome to Learnmate AI! Your verification code is: {otp_code}. Expires in 5 minutes."
+            }).encode('utf-8')
+            
+            req = urllib.request.Request(url, data=data, method='POST')
+            auth_str = f"{twilio_sid}:{twilio_token}"
+            auth_header = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
+            req.add_header("Authorization", f"Basic {auth_header}")
+            
+            with urllib.request.urlopen(req) as response:
+                res_code = response.getcode()
+                if res_code in (200, 201):
+                    print(f"[TWILIO SUCCESS] SMS sent successfully to {phone}", flush=True)
+                    return True
+        except Exception as e:
+            print(f"[TWILIO ERROR] Failed to send SMS to {phone}: {e}", flush=True)
+            
+    elif fast2sms_api_key:
+        try:
+            import urllib.request
+            import urllib.parse
+            import json
+            
+            # Clean phone number to exactly 10 digits for Indian SMS delivery
+            clean_phone = phone.replace(' ', '').replace('-', '').replace('(', '').replace(')', '')
+            if clean_phone.startswith('+91'):
+                clean_phone = clean_phone[3:]
+            elif clean_phone.startswith('91') and len(clean_phone) > 10:
+                clean_phone = clean_phone[2:]
+            
+            url = "https://www.fast2sms.com/dev/bulkV2"
+            headers = {
+                'authorization': fast2sms_api_key,
+                'Content-Type': 'application/json'
+            }
+            payload = {
+                'route': 'q',
+                'message': f"Welcome to Learnmate AI! Your verification code is: {otp_code}. Expires in 5 minutes.",
+                'language': 'english',
+                'numbers': clean_phone
+            }
+            data = json.dumps(payload).encode('utf-8')
+            req = urllib.request.Request(url, data=data, headers=headers, method='POST')
+            with urllib.request.urlopen(req) as response:
+                res_code = response.getcode()
+                if res_code == 200:
+                    print(f"[FAST2SMS SUCCESS] SMS sent successfully to {phone}", flush=True)
+                    return True
+        except Exception as e:
+            print(f"[FAST2SMS ERROR] Failed to send SMS to {phone}: {e}", flush=True)
+            
+    print("[SMS ERROR] Twilio/Fast2SMS credentials not configured. Please set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER or FAST2SMS_API_KEY in .env file.", flush=True)
+    return False
 
 @app.route('/login', methods=['POST'])
 def login_route():
@@ -99,37 +330,216 @@ def login_route():
         
     user = database.authenticate_user(username, password)
     if user:
+        if user.get('otp_verified') == 0:
+            return render_template('auth.html', error="Please verify your email or phone first.", tab='login')
+            
+        database.ensure_user_subscription_defaults(user['id'])
+        user = database.get_user_by_id(user['id'])
         session['user_id'] = user['id']
         session['username'] = user['username']
+        sync_user_session(user['id'])
         return redirect(url_for('dashboard_route'))
     else:
         return render_template('auth.html', error="Invalid credentials. Please check details.", tab='login')
 
 @app.route('/register', methods=['POST'])
 def register_route():
-    username = request.form.get('username', '').strip()
-    password = request.form.get('password', '').strip()
-    confirm_password = request.form.get('confirm_password', '').strip()
+    # Deprecated classic route - front-end now routes via `/api/start-register`
+    return render_template('auth.html', error="Classic registration deprecated. Please use the styled Register form.", tab='register')
+
+@app.route('/api/start-register', methods=['POST'])
+def api_start_register():
+    data = request.json or {}
+    username = data.get('username', '').strip()
+    email = data.get('email', '').strip()
+    phone = data.get('phone', '').strip()
+    password = data.get('password', '').strip()
+    method = data.get('verification_method', 'email').strip().lower()
     
-    if not username or not password:
-        return render_template('auth.html', error="All fields are required.", tab='register')
+    if not username or not email or not phone or not password:
+        return jsonify({'error': 'All fields are required.'}), 400
         
-    if len(password) < 6:
-        return render_template('auth.html', error="Password must be at least 6 characters.", tab='register')
+    # Uniqueness checks
+    if not database.check_unique_field('username', username):
+        return jsonify({'error': 'Username is already taken.'}), 400
+    if not database.check_unique_field('email', email):
+        return jsonify({'error': 'Email address is already registered.'}), 400
+    if not database.check_unique_field('phone', phone):
+        return jsonify({'error': 'Phone number is already registered.'}), 400
         
-    if password != confirm_password:
-        return render_template('auth.html', error="Passwords do not match.", tab='register')
+    strength_ok, strength_msg = validate_password_strength(password, username)
+    if not strength_ok:
+        return jsonify({'error': strength_msg}), 400
         
-    user_id = database.create_user(username, password)
-    if user_id:
-        return render_template('auth.html', msg="Registration successful! You can login now.", tab='login')
+    otp_code = generate_otp()
+    
+    sent = False
+    actual_method = method
+    if method == 'sms':
+        sent = send_sms_otp(phone, otp_code)
+        if not sent:
+            print("[FALLBACK] SMS delivery missed/unconfigured. Falling back to Email OTP.", flush=True)
+            actual_method = 'email'
+            sent = send_email_otp(email, otp_code)
     else:
-        return render_template('auth.html', error="Username already exists. Choose another.", tab='register')
+        sent = send_email_otp(email, otp_code)
+        
+    if not sent:
+        return jsonify({'error': 'Failed to deliver verification code. Please check credentials.'}), 500
+        
+    session['reg_temp_user'] = {
+        'username': username,
+        'email': email,
+        'phone': phone,
+        'password': password,
+        'verification_method': actual_method
+    }
+    session['reg_otp_code'] = otp_code
+    session['reg_otp_expiry'] = time.time() + 300
+    session['reg_otp_attempts'] = 0
+    session['reg_otp_last_sent'] = time.time()
+    session['reg_otp_target'] = email if actual_method == 'email' else phone
+    
+    res_body = {
+        'success': True,
+        'message': f'Verification code sent successfully.',
+        'target': session['reg_otp_target'],
+        'method': actual_method
+    }
+    if _otp_dev_mode_enabled():
+        res_body['dev_otp'] = otp_code
+    return jsonify(res_body)
+
+@app.route('/api/verify-otp', methods=['POST'])
+def api_verify_otp():
+    data = request.json or {}
+    user_otp = data.get('otp', '').strip()
+    
+    if not user_otp:
+        return jsonify({'error': 'Verification code is required.'}), 400
+        
+    temp_user = session.get('reg_temp_user')
+    otp_code = session.get('reg_otp_code')
+    otp_expiry = session.get('reg_otp_expiry', 0)
+    attempts = session.get('reg_otp_attempts', 0)
+    
+    if not temp_user or not otp_code:
+        return jsonify({'error': 'Registration session expired. Please start registration again.'}), 400
+        
+    if time.time() > otp_expiry:
+        return jsonify({'error': 'Verification code has expired. Please request a new code.', 'expired': True}), 400
+        
+    if attempts >= 3:
+        session.pop('reg_otp_code', None)
+        return jsonify({'error': 'Maximum incorrect verification attempts exceeded. Please register again.'}), 400
+        
+    if user_otp != otp_code:
+        attempts += 1
+        session['reg_otp_attempts'] = attempts
+        if attempts >= 3:
+            session.pop('reg_otp_code', None)
+            return jsonify({'error': 'Maximum incorrect attempts exceeded. Registration locked.'}), 400
+        return jsonify({'error': f'Incorrect code. {3 - attempts} attempt(s) remaining.'}), 400
+        
+    username = temp_user['username']
+    password = temp_user['password']
+    email = temp_user['email']
+    phone = temp_user['phone']
+    method = temp_user['verification_method']
+    
+    email_ver = 1
+    phone_ver = 1 if method == 'sms' else 0
+    
+    user_id = database.create_user(
+        username=username,
+        password=password,
+        email=email,
+        phone=phone,
+        email_verified=email_ver,
+        phone_verified=phone_ver,
+        otp_verified=1
+    )
+    
+    if not user_id:
+        return jsonify({'error': 'Failed to create user. Data might have changed.'}), 500
+        
+    session.pop('reg_temp_user', None)
+    session.pop('reg_otp_code', None)
+    session.pop('reg_otp_expiry', None)
+    session.pop('reg_otp_attempts', None)
+    session.pop('reg_otp_target', None)
+    
+    log_registration_notification(username, user_id)
+    
+    return jsonify({'success': True, 'message': 'Account verified and created successfully! You can sign in now.'})
+
+@app.route('/api/resend-otp', methods=['POST'])
+def api_resend_otp():
+    temp_user = session.get('reg_temp_user')
+    last_sent = session.get('reg_otp_last_sent', 0)
+    
+    if not temp_user:
+        return jsonify({'error': 'Registration session expired.'}), 400
+        
+    if time.time() - last_sent < 30:
+        remaining = int(30 - (time.time() - last_sent))
+        return jsonify({'error': f'Please wait {remaining} seconds before resending.'}), 400
+        
+    otp_code = generate_otp()
+    email = temp_user['email']
+    phone = temp_user['phone']
+    method = temp_user['verification_method']
+    
+    sent = False
+    actual_method = method
+    if method == 'sms':
+        sent = send_sms_otp(phone, otp_code)
+        if not sent:
+            actual_method = 'email'
+            sent = send_email_otp(email, otp_code)
+    else:
+        sent = send_email_otp(email, otp_code)
+        
+    session['reg_otp_code'] = otp_code
+    session['reg_otp_expiry'] = time.time() + 300
+    session['reg_otp_attempts'] = 0
+    session['reg_otp_last_sent'] = time.time()
+    session['reg_otp_target'] = email if actual_method == 'email' else phone
+    session['reg_temp_user']['verification_method'] = actual_method
+    
+    res_body = {
+        'success': True,
+        'message': f'A new verification code has been sent to your {actual_method}.',
+        'target': session['reg_otp_target'],
+        'method': actual_method
+    }
+    if _otp_dev_mode_enabled():
+        res_body['dev_otp'] = otp_code
+    return jsonify(res_body)
 
 @app.route('/logout')
 def logout_route():
     session.clear()
     return redirect(url_for('landing_route'))
+
+@app.route('/pricing')
+def pricing_route():
+    if 'user_id' not in session:
+        return redirect(url_for('auth_route'))
+    user = database.get_user_by_id(session['user_id'])
+    if user:
+        database.ensure_user_subscription_defaults(session['user_id'])
+        user = database.get_user_by_id(session['user_id'])
+    return render_template('pricing.html', active_page='pricing', user=user)
+
+@app.route('/admin')
+def admin_route():
+    if 'user_id' not in session:
+        return redirect(url_for('auth_route'))
+    search = request.args.get('search', '').strip()
+    stats = database.get_admin_dashboard_stats()
+    users = database.get_admin_user_rows(search)
+    return render_template('admin.html', active_page='admin', stats=stats, users=users, search=search)
 
 @app.route('/dashboard')
 def dashboard_route():
@@ -178,8 +588,29 @@ def chat_route():
 @app.route('/study-plan')
 def study_plan_route():
     user_id = session['user_id']
-    saved_plans = database.get_study_plans(user_id)
+    user = database.get_user_by_id(user_id)
+    username = user.get('username') if user else ''
     
+    saved_plans = database.get_study_plans(user_id)
+    used_attempts = len(saved_plans)
+    
+    is_admin = (username == 'tanishka253')
+    is_subscribed = (user.get('plan') or 'free').lower() in ('monthly', 'yearly') if user else False
+    
+    if is_admin or is_subscribed:
+        show_pricing = False
+        show_pricing_hint = False
+        free_attempts_remaining = -1
+    else:
+        if used_attempts >= 2:
+            show_pricing = True
+            show_pricing_hint = True
+            free_attempts_remaining = 0
+        else:
+            show_pricing = False
+            show_pricing_hint = False
+            free_attempts_remaining = max(0, 2 - used_attempts)
+        
     # Handle viewing a specific plan
     view_id = request.args.get('view', type=int)
     active_plan = None
@@ -209,7 +640,11 @@ def study_plan_route():
         active_page='study_plan', 
         saved_plans=saved_plans, 
         active_plan=active_plan,
-        view_id=view_id
+        view_id=view_id,
+        show_pricing=show_pricing,
+        show_pricing_hint=show_pricing_hint,
+        attempt_count=used_attempts,
+        free_attempts_remaining=free_attempts_remaining
     )
 
 @app.route('/upload')
@@ -225,11 +660,39 @@ def upload_route():
 @app.route('/quiz')
 def quiz_route():
     user_id = session['user_id']
+    user = database.get_user_by_id(user_id)
+    username = user.get('username') if user else ''
+    
     files = database.get_materials(user_id)
+    attempts = database.get_quiz_attempts(user_id)
+    used_attempts = len(attempts)
+    
+    is_admin = (username == 'tanishka253')
+    is_subscribed = (user.get('plan') or 'free').lower() in ('monthly', 'yearly') if user else False
+    
+    if is_admin or is_subscribed:
+        show_pricing = False
+        show_pricing_hint = False
+        free_attempts_remaining = -1
+    else:
+        if used_attempts >= 2:
+            show_pricing = True
+            show_pricing_hint = True
+            free_attempts_remaining = 0
+        else:
+            show_pricing = False
+            show_pricing_hint = False
+            free_attempts_remaining = max(0, 2 - used_attempts)
+        
+    session['attempts_left'] = free_attempts_remaining
     return render_template(
         'quiz.html', 
         active_page='quiz', 
-        files=files
+        files=files,
+        show_pricing=show_pricing,
+        show_pricing_hint=show_pricing_hint,
+        attempt_count=used_attempts,
+        free_attempts_remaining=free_attempts_remaining
     )
 
 @app.route('/weak-areas')
@@ -362,6 +825,25 @@ def api_delete_study_plan(plan_id):
     database.delete_study_plan(plan_id, user_id)
     return jsonify({'success': True, 'message': 'Study plan removed successfully.'})
 
+def require_subscription_access():
+    user_id = session.get('user_id')
+    if not user_id:
+        return None, (jsonify({'error': 'Authentication required.'}), 401)
+
+    database.ensure_user_subscription_defaults(user_id)
+    user = database.get_user_by_id(user_id)
+    if not user:
+        return None, (jsonify({'error': 'Account not found.'}), 404)
+
+    plan = (user.get('plan') or 'free').lower()
+    if plan in ('monthly', 'yearly'):
+        return user, None
+
+    allowed, result = database.consume_ai_attempt(user_id)
+    if allowed:
+        return user, None
+    return None, (jsonify({'error': 'Your free AI tutor limit has been reached. Upgrade to continue.', 'redirect': '/pricing'}), 403)
+
 @app.route('/api/chat', methods=['POST'])
 def api_chat():
     user_id = session['user_id']
@@ -372,6 +854,10 @@ def api_chat():
 
     if not message:
         return jsonify({'error': 'Message content is empty'}), 400
+
+    user = database.get_user_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'Account not found.'}), 404
 
     if not api_key:
         return jsonify({'reply': 'Mock Mode Response: Please configure your GEMINI_API_KEY in the `.env` configuration file to activate live tutoring.', 'sources': []})
@@ -435,6 +921,19 @@ def api_chat():
 @app.route('/api/generate-plan', methods=['POST'])
 def api_generate_plan():
     user_id = session['user_id']
+    user = database.get_user_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'Account not found.'}), 404
+
+    username = user.get('username')
+    is_admin = (username == 'tanishka253')
+    is_subscribed = (user.get('plan') or 'free').lower() in ('monthly', 'yearly')
+
+    if not is_admin and not is_subscribed:
+        saved_plans = database.get_study_plans(user_id)
+        if len(saved_plans) >= 2:
+            return jsonify({'error': 'Your free study plan attempts are used up. Upgrade to continue.'}), 403
+
     data = request.json or {}
     subject = data.get('subject', '').strip()
     goal = data.get('goal', '').strip()
@@ -501,6 +1000,19 @@ def api_generate_plan():
 @app.route('/api/generate-quiz', methods=['POST'])
 def api_generate_quiz():
     user_id = session['user_id']
+    user = database.get_user_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'Account not found.'}), 404
+
+    username = user.get('username')
+    is_admin = (username == 'tanishka253')
+    is_subscribed = (user.get('plan') or 'free').lower() in ('monthly', 'yearly')
+
+    if not is_admin and not is_subscribed:
+        attempts = database.get_quiz_attempts(user_id)
+        if len(attempts) >= FREE_QUIZ_ATTEMPTS:
+            return jsonify({'error': 'Your free quiz attempts are used up. Upgrade to continue.'}), 403
+
     data = request.json or {}
     topic = data.get('topic', '').strip()
     material_id = data.get('material_id', '')
@@ -752,6 +1264,46 @@ def api_progress_data():
         'quiz_history': quiz_history,
         'topic_scores': topic_scores
     })
+
+@app.route('/api/create-order', methods=['POST'])
+def api_create_order():
+    user_id = session['user_id']
+    data = request.json or {}
+    plan = data.get('plan', '').strip().lower()
+    if plan not in ('monthly', 'yearly'):
+        return jsonify({'error': 'Invalid plan selected.'}), 400
+
+    amount = 29900 if plan == 'monthly' else 320000
+    order_id = f"order_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    payload = {
+        'amount': amount,
+        'currency': 'INR',
+        'receipt': order_id,
+        'notes': {'user_id': str(user_id), 'plan': plan},
+    }
+    database.activate_subscription(user_id, plan, 'pending', order_id=order_id, days=30 if plan == 'monthly' else 365)
+    return jsonify({'order_id': order_id, 'amount': amount, 'currency': 'INR', 'plan': plan})
+
+@app.route('/api/verify-payment', methods=['POST'])
+def api_verify_payment():
+    user_id = session['user_id']
+    data = request.json or {}
+    payment_id = data.get('razorpay_payment_id', '')
+    order_id = data.get('razorpay_order_id', '')
+    signature = data.get('razorpay_signature', '')
+    plan = data.get('plan', '').strip().lower()
+    if not payment_id or not order_id or not signature or plan not in ('monthly', 'yearly'):
+        return jsonify({'error': 'Missing payment verification data.'}), 400
+
+    generated_signature = hmac.new(
+        os.getenv('RAZORPAY_KEY_SECRET', 'test_secret').encode(),
+        f"{order_id}|{payment_id}".encode(),
+        hashlib.sha256
+    ).hexdigest()
+    if hmac.compare_digest(generated_signature, signature):
+        database.activate_subscription(user_id, plan, 'paid', payment_id=payment_id, order_id=order_id, days=30 if plan == 'monthly' else 365)
+        return jsonify({'success': True, 'message': 'Subscription activated.'})
+    return jsonify({'error': 'Payment verification failed.'}), 400
 
 # Main Server Bootstrapper
 if __name__ == "__main__":

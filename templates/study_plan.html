@@ -16,6 +16,36 @@
         <!-- Form card -->
         <div class="glass-card">
             <h3 style="font-size:1.15rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="sparkles" style="color:var(--primary);"></i> Plan Builder</h3>
+            
+            {% if show_pricing %}
+            <div id="pricing-paywall-card" class="glass-card" data-show-pricing="true" style="margin-bottom: 0px; padding: 1.1rem; border: 1px solid rgba(99, 102, 241, 0.25); background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(6, 182, 212, 0.08)); border-radius: 16px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem; margin-bottom:0.75rem; flex-wrap:wrap;">
+                    <div>
+                        <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.22em; color:var(--secondary); margin-bottom:0.2rem;">Premium</div>
+                        <h4 style="margin:0; font-size:1.05rem; color:var(--text-primary);">Upgrade to continue</h4>
+                    </div>
+                    <span style="padding:0.35rem 0.65rem; border-radius:999px; background:rgba(255,255,255,0.09); font-size:0.78rem; font-weight:700; color:var(--primary);">{{ attempt_count if attempt_count is defined else 0 }} free {% if (attempt_count or 0) == 1 %}try{% else %}tries{% endif %} used</span>
+                </div>
+                <p style="font-size:0.9rem; color:var(--text-secondary); line-height:1.55; margin-bottom:0.85rem;">
+                    You have 0 free study plans left. Upgrade to premium to continue creating personalized academic schedules.
+                </p>
+                <div style="display:grid; gap:0.7rem; margin-bottom:0.95rem;">
+                    <div style="padding:0.85rem 0.95rem; border-radius:12px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                            <span style="font-weight:600;">Monthly</span>
+                            <strong style="font-size:1.02rem; color:var(--primary);">₹299/month</strong>
+                        </div>
+                    </div>
+                    <div style="padding:0.85rem 0.95rem; border-radius:12px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.08);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                            <span style="font-weight:600;">Yearly</span>
+                            <strong style="font-size:1.02rem; color:var(--secondary);">₹3,200/year</strong>
+                        </div>
+                    </div>
+                </div>
+                <a href="/pricing" class="btn btn-primary" style="width:100%; display:inline-flex; justify-content:center; align-items:center; text-decoration:none;">View Pricing</a>
+            </div>
+            {% else %}
             <form id="study-plan-form">
                 <div class="form-group">
                     <label class="form-label" for="subject-input">Subject / Course Name</label>
@@ -37,6 +67,7 @@
                     <i data-lucide="zap"></i> Generate with AI
                 </button>
             </form>
+            {% endif %}
         </div>
 
         <!-- Saved Plans Card -->

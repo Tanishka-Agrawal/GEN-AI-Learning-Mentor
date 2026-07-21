@@ -1,25 +1,28 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Learnmate AI{% endblock %}</title>
-    
+
     <!-- Meta tags for SEO -->
-    <meta name="description" content="Personalized AI Tutor, custom study schedules, smart notes indexing, quiz evaluations, and analytics insights.">
+    <meta name="description"
+        content="Personalized AI Tutor, custom study schedules, smart notes indexing, quiz evaluations, and analytics insights.">
     <meta name="author" content="Learnmate AI Team">
-    
+
     <!-- Core Design Stylesheets -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    
+
     <!-- Lucide Icons CDN -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    
+
     <!-- Chart.js CDN (required for Progress Analytics) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     {% block head %}{% endblock %}
 </head>
+
 <body>
     <div class="app-container">
         <!-- Sidebar Navigation (Only visible when user is authenticated) -->
@@ -31,7 +34,7 @@
                 </div>
                 <span class="brand-name">Learnmate AI</span>
             </a>
-            
+
             <ul class="sidebar-menu">
                 <li class="menu-item {% if active_page == 'dashboard' %}active{% endif %}">
                     <a href="{{ url_for('dashboard_route') }}">
@@ -76,39 +79,57 @@
                     </a>
                 </li>
             </ul>
-            
+
             <div class="sidebar-footer">
                 <button class="theme-toggle" id="theme-toggle-btn" title="Toggle color scheme">
                     <span id="theme-toggle-icon"><i data-lucide="sun"></i></span>
                     <span id="theme-toggle-text">Light Mode</span>
                 </button>
-                
+
                 <div class="user-profile">
                     <div class="user-avatar">
                         {{ session.get('username', 'U')[0] | upper }}
                     </div>
                     <div class="user-info">
                         <span class="user-name">{{ session.get('username', 'Student') }}</span>
-                        <span class="user-role">Free Learner</span>
+                        <span class="user-role">
+                            {% set plan = session.get('plan', 'free') %}
+                            {% if plan == 'monthly' %}Pro Monthly{% elif plan == 'yearly' %}Pro Yearly{% else %}Free{%
+                            endif %}
+                        </span>
+                        {% if session.get('username') == 'tanishka253' %}
+                        <span
+                            style="font-size:0.72rem; color:var(--success); font-weight:600; display:flex; align-items:center; gap:3px;"><i
+                                data-lucide="check-circle" style="width:12px; height:12px;"></i> Admin Access</span>
+                        {% elif session.get('plan', 'free') == 'free' %}
+                        <div
+                            style="font-size:0.72rem; color:var(--text-muted); margin-top:0.25rem; display:flex; flex-direction:column; gap:0.15rem; border-top:1px solid rgba(255,255,255,0.06); padding-top:0.25rem; text-align:left;">
+                            <span>AI Chat: <strong style="color:var(--success);">Free</strong></span>
+                            <span>Quiz Gen: {{ session.get('quiz_attempts_left', 2) }} left</span>
+                            <span>Plan Gen: {{ session.get('plan_attempts_left', 2) }} left</span>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
-                
-                <a href="{{ url_for('logout_route') }}" class="btn btn-secondary" style="padding: 0.5rem; display: flex; justify-content: center; gap: 0.5rem;">
+
+                <a href="{{ url_for('logout_route') }}" class="btn btn-secondary"
+                    style="padding: 0.5rem; display: flex; justify-content: center; gap: 0.5rem;">
                     <i data-lucide="log-out"></i>
                     <span>Log Out</span>
                 </a>
             </div>
         </aside>
         {% endif %}
-        
+
         <!-- Main Content Area -->
         <main class="main-viewport" style="{% if not session.get('user_id') %}margin-left: 0; padding: 0;{% endif %}">
             {% block content %}{% endblock %}
         </main>
     </div>
-    
+
     <!-- Shared App Scripts -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
+
 </html>
